@@ -1,0 +1,322 @@
+# 📁 파일 구조
+
+```
+my-tech-blog/
+├── package.json
+├── next.config.js
+├── .env.local                  ← API 키 저장 (절대 공개 금지)
+├── .gitignore
+├── posts/                      ← 블로그 글 저장 폴더 (마크다운)
+│   └── example-post.md
+├── lib/
+│   └── posts.js                ← 글 불러오는 유틸
+├── pages/
+│   ├── index.js                ← 메인 페이지
+│   ├── [slug].js               ← 글 상세 페이지
+│   └── api/
+│       └── generate.js         ← AI 글 생성 API
+└── styles/
+    └── globals.css
+```
+
+---
+
+## 📄 package.json
+
+```json
+{
+  "name": "my-tech-blog",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "gray-matter": "^4.0.3",
+    "remark": "^15.0.1",
+    "remark-html": "^16.0.1",
+    "@anthropic-ai/sdk": "^0.20.0"
+  }
+}
+```
+
+---
+
+## 📄 next.config.js
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+module.exports = nextConfig;
+```
+
+---
+
+## 📄 .gitignore
+
+```
+node_modules/
+.next/
+.env.local
+```
+
+---
+
+## 📄 .env.local
+> ⚠️ 이 파일은 절대 GitHub에 올리면 안 됩니다!
+
+```
+ANTHROPIC_API_KEY=sk-ant-여기에_발급받은_키_입력
+```
+
+---
+
+## 📄 posts/example-post.md
+
+```markdown
+---
+title: "ChatGPT vs Claude: 2024년 AI 어시스턴트 비교"
+date: "2024-01-15"
+description: "두 AI의 핵심 차이를 정리했습니다."
+---
+
+## 개요
+
+AI 어시스턴트 시장이 빠르게 성장하고 있습니다...
+
+## 성능 비교
+
+ChatGPT와 Claude는 각각 다른 강점을 가지고 있습니다...
+```
+
+---
+
+## 📄 lib/posts.js
+
+```js
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
+import { remark } from 'remark';
+import remarkHtml from 'remark-html';
+
+const postsDir = path.join(process.cwd(), 'posts');
+
+export function getAllPosts() {
+  if (!fs.existsSync(postsDir)) return [];
+  const files = fs.readdirSync(postsDir).filter(f => f.endsWith('.md'));
+  return files
+    .map(filename => {
+      const slug = filename.replace(/\.md$/, '');
+      const raw = fs.readFileSync(path.join(postsDir, filename), 'utf8');
+      const { data } = matter(raw);
+      return { slug, ...data };
+    })
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+export async function getPostBySlug(slug) {
+  const filepath = path.join(postsDir, `${slug}.md`);
+  const raw = fs.readFileSync(filepath, 'utf8');
+  const { data, content } = matter(raw);
+  const processed = await remark().use(remarkHtml).process(content);
+  return { slug, ...data, contentHtml: processed.toString() };
+}
+```
+
+---
+
+## 📄 pages/index.js
+
+```jsx
+import { getAllPosts } from '../lib/posts';
+import Link from 'next/link';
+import Head from 'next/head';
+
+export default function Home({ posts }) {
+  return (
+    <>
+      <Head>
+        <title>IT 테크 블로그</title>
+        <meta name="description" content="최신 IT 기술 정보를 매일 업데이트합니다." />
+        {/* Google AdSense — 승인 후 아래 코드 교체 */}
+        {/* <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXX" crossOrigin="anonymous"></script> */}
+      </Head>
+
+      <main style={{ maxWidth: 720, margin: '0 auto', padding: '2rem 1rem', fontFamily: 'sans-serif' }}>
+        <h1 style={{ fontSize: 28, marginBottom: 8 }}>IT 테크 블로그</h1>
+        <p style={{ color: '#666', marginBottom: 32 }}>매일 자동 업데이트되는 IT 기술 정보</p>
+
+        {/* 광고 배너 자리 */}
+        <div style={{ background: '#f5f5f5', padding: '1rem', textAlign: 'center', marginBottom: 32, borderRadius: 8, color: '#999', fontSize: 13 }}>
+          광고 영역 (AdSense 승인 후 코드 삽입)
+        </div>
+
+        <div>
+          {posts.map(post => (
+            <Link key={post.slug} href={`/${post.slug}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{ borderBottom: '1px solid #eee', paddingBottom: 20, marginBottom: 20, cursor: 'pointer' }}>
+                <h2 style={{ fontSize: 20, margin: '0 0 6px' }}>{post.title}</h2>
+                <p style={{ color: '#888', fontSize: 13, margin: '0 0 8px' }}>{post.date}</p>
+                <p style={{ color: '#555', fontSize: 15, margin: 0 }}>{post.description}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </main>
+    </>
+  );
+}
+
+export async function getStaticProps() {
+  const posts = getAllPosts();
+  return { props: { posts } };
+}
+```
+
+---
+
+## 📄 pages/[slug].js
+
+```jsx
+import { getAllPosts, getPostBySlug } from '../lib/posts';
+import Head from 'next/head';
+import Link from 'next/link';
+
+export default function PostPage({ post }) {
+  return (
+    <>
+      <Head>
+        <title>{post.title} | IT 테크 블로그</title>
+        <meta name="description" content={post.description} />
+      </Head>
+
+      <main style={{ maxWidth: 720, margin: '0 auto', padding: '2rem 1rem', fontFamily: 'sans-serif' }}>
+        <Link href="/" style={{ color: '#888', fontSize: 14, textDecoration: 'none' }}>← 목록으로</Link>
+
+        <h1 style={{ fontSize: 26, margin: '16px 0 8px' }}>{post.title}</h1>
+        <p style={{ color: '#999', fontSize: 13, marginBottom: 32 }}>{post.date}</p>
+
+        {/* 광고 배너 자리 */}
+        <div style={{ background: '#f5f5f5', padding: '1rem', textAlign: 'center', marginBottom: 32, borderRadius: 8, color: '#999', fontSize: 13 }}>
+          광고 영역 (AdSense 승인 후 코드 삽입)
+        </div>
+
+        <div dangerouslySetInnerHTML={{ __html: post.contentHtml }} style={{ lineHeight: 1.8, fontSize: 16 }} />
+      </main>
+    </>
+  );
+}
+
+export async function getStaticPaths() {
+  const posts = getAllPosts();
+  return {
+    paths: posts.map(p => ({ params: { slug: p.slug } })),
+    fallback: false,
+  };
+}
+
+export async function getStaticProps({ params }) {
+  const post = await getPostBySlug(params.slug);
+  return { props: { post } };
+}
+```
+
+---
+
+## 📄 pages/api/generate.js
+> Claude API를 호출해서 글을 자동 생성하는 핵심 파일
+
+```js
+import Anthropic from '@anthropic-ai/sdk';
+import fs from 'fs';
+import path from 'path';
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// 오늘 날짜를 파일명으로 사용
+function todaySlug() {
+  return new Date().toISOString().split('T')[0];
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  // 간단한 보안: 환경변수로 설정한 비밀 키 확인
+  if (req.headers['x-secret'] !== process.env.GENERATE_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const topics = [
+    '최신 AI 도구 활용법',
+    '개발자 생산성 향상 팁',
+    '클라우드 서비스 비교',
+    '사이버 보안 기초',
+    '오픈소스 프로젝트 소개',
+    '프로그래밍 언어 트렌드',
+    'ChatGPT 프롬프트 활용법',
+    '무료 개발 도구 추천',
+  ];
+  const topic = topics[Math.floor(Math.random() * topics.length)];
+
+  const message = await client.messages.create({
+    model: 'claude-opus-4-6',
+    max_tokens: 1500,
+    messages: [{
+      role: 'user',
+      content: `다음 주제로 IT 블로그 글을 작성해줘: "${topic}"
+
+반드시 아래 마크다운 형식으로만 응답해:
+
+---
+title: "글 제목"
+date: "${todaySlug()}"
+description: "한 줄 요약 (100자 이내)"
+---
+
+(본문 내용, 최소 600자, 소제목 3개 이상 포함)`,
+    }],
+  });
+
+  const content = message.content[0].text;
+  const slug = `${todaySlug()}-${Math.floor(Math.random() * 1000)}`;
+  const filepath = path.join(process.cwd(), 'posts', `${slug}.md`);
+
+  fs.mkdirSync(path.join(process.cwd(), 'posts'), { recursive: true });
+  fs.writeFileSync(filepath, content, 'utf8');
+
+  res.status(200).json({ success: true, slug, topic });
+}
+```
+
+---
+
+## 📄 styles/globals.css
+
+```css
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #222; }
+h1, h2, h3 { line-height: 1.3; }
+img { max-width: 100%; }
+```
+
+---
+
+# 🚀 GitHub에 올리는 법 (방법 B 사용자)
+
+GitHub Desktop 앱을 사용하면 터미널 없이 올릴 수 있어요:
+1. **GitHub Desktop** 다운로드 (desktop.github.com)
+2. `File → Add Local Repository` → 폴더 선택
+3. `Commit to main` → `Push origin` 클릭
+
+---
+
+# ✅ 다음 단계
+
+1. 이 코드를 GitHub에 올리기
+2. Vercel에서 `ANTHROPIC_API_KEY`와 `GENERATE_SECRET` 환경변수 설정
+3. GitHub Actions 스케줄러 추가 (매일 자동 글 생성)
